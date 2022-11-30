@@ -1,0 +1,14 @@
+Metadata-Version: 2.1
+Name: Newton-Polygon
+Version: 0.0.5
+Summary: Python power geometry package.
+Home-page: https://github.com/Garrisonmond/Newton-Polygon/tree/main
+Author: Ivan Kuznetsov
+Author-email: maxbeyn@icloud.com
+Classifier: Programming Language :: Python :: 3.7
+Classifier: License :: OSI Approved :: GNU General Public License v3 (GPLv3)
+Description-Content-Type: text/markdown
+License-File: LICENSE
+
+# Newton-Polygon
+Open-source power geometry python library.

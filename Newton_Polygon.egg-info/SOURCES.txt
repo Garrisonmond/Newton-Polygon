@@ -1,0 +1,10 @@
+LICENSE
+README.md
+setup.py
+Newton_Polygon.egg-info/PKG-INFO
+Newton_Polygon.egg-info/SOURCES.txt
+Newton_Polygon.egg-info/dependency_links.txt
+Newton_Polygon.egg-info/requires.txt
+Newton_Polygon.egg-info/top_level.txt
+newton_polygon/__init__.py
+newton_polygon/polygon.py
