@@ -605,6 +605,3 @@ class NewtonPolygon(Polynomial):
             raise NameError("Passed index is out of range")
         del self.edges[edge_index]
 
-
-a = NewtonPolygon("u'''[t] - 12 u'[t]^2 - 72 u[t]^2 u'[t] - 54 u[t]^4", 'u', 't')
-a.draw('Shit')
