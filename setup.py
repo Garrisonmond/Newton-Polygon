@@ -5,7 +5,7 @@ with open("README.md", "r") as readme_file:
 
 setup(
     name="Newton-Polygon",
-    version="0.0.5",
+    version="0.0.6",
     author="Ivan Kuznetsov",
     author_email="maxbeyn@icloud.com",
     description="Python power geometry package.",
