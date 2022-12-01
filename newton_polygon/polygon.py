@@ -1,6 +1,17 @@
 import matplotlib.pyplot as plt
 import seaborn as sns
 from wolframclient.evaluation import WolframLanguageSession
+from wolframclient.language.expression import WLFunction
+
+
+def _patched(self):
+    """!
+    WLFunction method overriding.
+    """
+    return "%s[%s]" % (repr(self.head), ", ".join(repr(x) for x in self.args))
+
+
+WLFunction.__repr__ = _patched
 
 
 class Fraction:
@@ -18,12 +29,40 @@ class Fraction:
             raise ValueError("The given fraction is improper")
         if b == 0:
             raise ValueError("Denominator is equal to 0")
+        sign = 1
         if b < 0:
-            self.a = -a
-            self.b = -b
-        else:
-            self.a = a
-            self.b = b
+            sign = -1 * sign
+        if a < 0:
+            sign = -1 * sign
+        self.a, self.b = self.simplifyFraction(abs(a), abs(b))
+        self.a = sign * self.a
+
+    def gcd(self, a, b):
+        """!
+        Find gcd.
+        @param a int
+        @param b int
+        @return gcd int
+        """
+        if a == 0:
+            return b
+        if b == 0:
+            return a
+        if a == b:
+            return a
+        if a > b:
+            return self.gcd(a - b, b)
+        return self.gcd(a, b - a)
+
+    def simplifyFraction(self, a, b):
+        """!
+        Fraction simplification method.
+        @param a int
+        @param b int
+        @return new_a int
+        @return new_b int"""
+        divisor = self.gcd(a, b)
+        return a // divisor, b // divisor
 
     def __str__(self):
         """!
@@ -62,13 +101,28 @@ class Fraction:
 
     def __float__(self):
         """!
-        Basic conver to float method
+        Basic convert to float method
         @return res float
         """
         return self.a / self.b
 
+    def __eq__(self, other):
+        """!
+        Basic equality methods for fractions.
+        @param other Fraction
+        @return res bool
+        """
+        if self.a == other.a and self.b == other.b:
+            return True
+        return False
+
 
 def alphabetic(string: str):
+    """!
+    Check if a given sting is alphabetical.
+    @param string str
+    @return res bool
+    """
     for letter in string:
         if not letter.isalpha():
             return 0
@@ -143,8 +197,7 @@ class Monomial:
         for i in range(len(factor_list)):
             if type(factor_list[i]) != Factor:
                 raise ValueError("Passed factor list is not valid")
-        self.factor_list = sorted(sorted(
-            factor_list, key=lambda x: x.name, reverse=True), key=lambda x: x.der_ord, reverse=True)
+        self.factor_list = self.sort(factor_list)
 
     def __str__(self):
         """!
@@ -159,6 +212,23 @@ class Monomial:
                 string += s
 
         return string
+
+    @staticmethod
+    def sort(factor_list):
+        """!
+        Sort factor list.
+        @param factor_list list of Factor objects
+        @return new list of Factor objects
+        """
+        if len(factor_list) < 2:
+            return factor_list
+        factor_list = sorted(factor_list, key=lambda x: str(x)[0])
+        if factor_list[0].name[0] == '-' or factor_list[0].name[0].isnumeric():
+            new = [factor_list[0]]
+            new = new + sorted(factor_list[1:], key=lambda x: x.der_ord, reverse=True)
+            return new
+        else:
+            return sorted(factor_list, key=lambda x: x.der_ord, reverse=True)
 
     def get_point(self, func: str, arg: str):
         """!
@@ -188,7 +258,7 @@ class Monomial:
                 y = y + factor.power
             if factor.name == arg and factor.der_by == '':
                 x = x + factor.power
-        return (x, y)
+        return x, y
 
 
 class WolframExpression:
@@ -292,12 +362,15 @@ class Polynomial(WolframExpression):
     """!
        Basic class for handling differential polynomials initialized by wolfram expression.
     """
+
     def __init__(self, wolfram_expr: str):
         """!
         Polynomial initializer
         @param wolfram_expr str
         """
         super().__init__(wolfram_expr)
+        if self.wolfram_expr[:4] != 'Plus':
+            self.wolfram_expr = 'Plus[' + self.wolfram_expr + ']'
         self.monomial_list = []
         self.__factor_list = []
         self._py_expr, self.args = self._get(self.wolfram_expr)
@@ -503,23 +576,12 @@ class Polynomial(WolframExpression):
         """
         return self._alter_py_expr(self._py_expr)
 
-    def replacement(self, wolfram_expr):
-        """!
-        Allows user to input replacement using wolfram language function definition of u[t]:= y[t] + c/t^-1
-        @param wolfram_expr str
-        @return res Polynomial
-        """
-        session = WolframLanguageSession()
-        session.evaluate(wolfram_expr)
-        new = session.evaluate(f'Expand[{self.wolfram_expr}]')
-        session.terminate()
-        return Polynomial(new)
-
 
 class NewtonPolygon(Polynomial):
     """!
     Class for handling basic Newton Polygons for differential polynomials.
     """
+
     def __init__(self, wolfram_expr: str, func: str, arg: str):
         """!
         Newton Polygon initializer.
@@ -529,7 +591,6 @@ class NewtonPolygon(Polynomial):
         @return res NewtonPolygon
         """
         super().__init__(wolfram_expr)
-        self.points = []
         if type(func) != str:
             ValueError("Passed function name is not a string.")
         if type(arg) != str:
@@ -537,46 +598,49 @@ class NewtonPolygon(Polynomial):
         self.func = func
         self.arg = arg
         self.edges = []
-        self._points = {}
+        self._points = []
         for monomial in self.monomial_list:
             point = monomial.get_point(func, arg)
             for coord in point:
                 if type(coord) != Fraction:
                     ValueError("Passed points list is not valid.")
+            flag = 1
+            for p in self._points:
+                if p[0] == point[0] and p[1] == point[1]:
+                    p[2].append(monomial)
+                    flag = 0
+            if flag:
+                self._points.append([point[0], point[1], [monomial]])
 
-            if point in self._points.keys():
-                self._points[point].append(monomial)
-            else:
-                self._points[point] = [monomial]
-
-    def replacement(self, wolfram_expr):
+    def replacement(self, wolfram_expr, func: str, arg: str):
         """!
         Allows user to input replacement using wolfram language function definition of u[t]:= y[t] + c/t^-1
         @param wolfram_expr str
-        @return res Polynomial
+        @param func str
+        @param arg str
+        @return res NewtonPolygon
         """
         session = WolframLanguageSession()
         session.evaluate(wolfram_expr)
         new = session.evaluate(f'Expand[{self.wolfram_expr}]')
         session.terminate()
-        return NewtonPolygon(new, self.func, self.arg)
+        return NewtonPolygon(new, func, arg)
 
     def draw(self, name=''):
         """!
         Method for drawing Newton polygons.
-        @param name str"""
+        @param name str
+        """
         if type(name) != Fraction:
             ValueError("Passed name is not a string.")
         sns.set(style="darkgrid")
-        l = list(self._points.keys())
-        print(l)
-        for i in range(len(l)):
-            plt.plot(float(l[i][0]), float(l[i][1]), marker='o', label=f'Q{i}')
-            plt.text(float(l[i][0]), float(l[i][1]),
-                     f'({float(l[i][0])},{float(l[i][1])})')
+        for i in range(len(self._points)):
+            plt.plot(float(self._points[i][0]), float(self._points[i][1]), marker='o', label=f'Q{i}')
+            plt.text(float(self._points[i][0]), float(self._points[i][1]),
+                     f'({float(self._points[i][0])},{float(self._points[i][1])})')
         for i in range(len(self.edges)):
-            point1 = self.points[self.edges[i][0]]
-            point2 = self.points[self.edges[i][1]]
+            point1 = self._points[self.edges[i][0]]
+            point2 = self._points[self.edges[i][1]]
             x_values = [float(point1[0]), float(point2[0])]
             y_values = [float(point1[1]), float(point2[1])]
             plt.plot(x_values, y_values, label=f'Г1_{i}')
@@ -584,6 +648,16 @@ class NewtonPolygon(Polynomial):
         plt.legend()
         plt.title(name)
         plt.show()
+
+    def print_points(self):
+        """!
+        Print points used to initialize Newton polygon.
+        """
+        for i in range(len(self._points)):
+            print(f'Q{i} ({self._points[i][0]}, {self._points[i][1]}):', end=' ')
+            for monomial in self._points[i][2]:
+                print(monomial.__str__(), end=' ')
+            print()
 
     def add_edge(self, point_index1: int, point_index2: int):
         """!
@@ -593,9 +667,9 @@ class NewtonPolygon(Polynomial):
         """
         if type(point_index1) != int or type(point_index2) != int:
             raise NameError("Passed indexes are not int")
-        if point_index1 >= len(self.points) or point_index1 < 0:
+        if point_index1 >= len(self._points) or point_index1 < 0:
             raise NameError("Passed index 1 is out of range")
-        if point_index2 >= len(self.points) or point_index2 < 0:
+        if point_index2 >= len(self._points) or point_index2 < 0:
             raise NameError("Passed index 2 is out of range")
         self.edges.append([point_index1, point_index2])
 
@@ -609,4 +683,3 @@ class NewtonPolygon(Polynomial):
         if edge_index >= len(self.edges) or edge_index < 0:
             raise NameError("Passed index is out of range")
         del self.edges[edge_index]
-
